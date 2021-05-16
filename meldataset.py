@@ -58,7 +58,7 @@ def mel_spectrogram(y, n_fft, num_mels, sampling_rate, hop_size, win_size, fmin,
         mel_basis[str(fmax)+'_'+str(y.device)] = torch.from_numpy(mel).float().to(y.device)
         hann_window[str(y.device)] = torch.hann_window(win_size).to(y.device)
 
-    y = torch.nn.functional.pad(y.unsqueeze(1), (int((n_fft)/2), int((n_fft)/2)), mode='reflect')
+    y = torch.nn.functional.pad(y.unsqueeze(1), (int((n_fft-hop_size)/2), int((n_fft-hop_size)/2)), mode='reflect')
     y = y.squeeze(1)
 
     spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[str(y.device)],
@@ -149,6 +149,13 @@ class MelDataset(torch.utils.data.Dataset):
             if len(mel.shape) < 3:
                 mel = mel.unsqueeze(0)
 
+            len_mel = int(audio.size(-1) / self.hop_size)
+            gap = mel.size(-1) - len_mel
+            if gap > 0:
+                mel = mel[..., int(gap/2):mel.size(-1)-(gap-int(gap/2))]
+            else:
+                mel = torch.nn.functional.pad(mel, (0, -gap), 'constant')
+
             if self.split:
                 frames_per_seg = math.ceil(self.segment_size / self.hop_size)
 
@@ -164,7 +171,7 @@ class MelDataset(torch.utils.data.Dataset):
                                    self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax_loss,
                                    center=False)
 
-        return (mel.squeeze(), audio.squeeze(0), filename, mel_loss.squeeze())
+        return mel.squeeze(), audio.squeeze(0), mel_loss.squeeze(), filename
 
     def __len__(self):
         return len(self.audio_files)

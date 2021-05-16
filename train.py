@@ -17,6 +17,8 @@ from meldataset import MelDataset, mel_spectrogram, get_dataset_filelist
 from models import Generator, MultiPeriodDiscriminator, MultiScaleDiscriminator, feature_loss, generator_loss,\
     discriminator_loss
 from utils import plot_spectrogram, scan_checkpoint, load_checkpoint, save_checkpoint
+import warnings
+warnings.simplefilter("ignore", UserWarning)
 
 torch.backends.cudnn.benchmark = True
 
@@ -113,7 +115,7 @@ def train(rank, a, h):
         for i, batch in enumerate(train_loader):
             if rank == 0:
                 start_b = time.time()
-            x, y, _, y_mel = batch
+            x, y, y_mel, _ = batch
             x = torch.autograd.Variable(x.to(device, non_blocking=True))
             y = torch.autograd.Variable(y.to(device, non_blocking=True))
             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
@@ -161,7 +163,7 @@ def train(rank, a, h):
                     with torch.no_grad():
                         mel_error = F.l1_loss(y_mel, y_g_hat_mel).item()
 
-                    print('Steps : {:d}, Gen Loss Total : {:4.3f}, Mel-Spec. Error : {:4.3f}, s/b : {:4.3f}'.
+                    print('Steps : {:d}, Gen Loss Total : {:4.3f}, Mel-Spec Error : {:4.3f}, s/b : {:4.3f}'.
                           format(steps, loss_gen_all, mel_error, time.time() - start_b))
 
                 # checkpointing
@@ -190,7 +192,7 @@ def train(rank, a, h):
                     val_err_tot = 0
                     with torch.no_grad():
                         for j, batch in enumerate(validation_loader):
-                            x, y, _, y_mel = batch
+                            x, y, y_mel, _ = batch
                             y_g_hat = generator(x.to(device))
                             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
                             y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate,
@@ -232,16 +234,16 @@ def main():
     parser.add_argument('--group_name', default=None)
     # parser.add_argument('--input_wavs_dir', default='LJSpeech-1.1/wavs')
     # parser.add_argument('--input_mels_dir', default='ft_dataset')
-    parser.add_argument('--train_wavs_dir', default='vivos/train/waves')
-    parser.add_argument('--val_wavs_dir', default='vivos/test/waves')
-    parser.add_argument('--train_mels_dir', default='vivos/train/mels')
-    parser.add_argument('--val_mels_dir', default='vivos/test/mels')
-    parser.add_argument('--input_training_file', default='LJSpeech-1.1/training.txt')
-    parser.add_argument('--input_validation_file', default='LJSpeech-1.1/validation.txt')
+    parser.add_argument('--train_wavs_dir', default='../vivos/train/waves')
+    parser.add_argument('--val_wavs_dir', default='../vivos/test/waves')
+    parser.add_argument('--train_mels_dir', default='../vivos/train/mels')
+    parser.add_argument('--val_mels_dir', default='../vivos/test/mels')
+    parser.add_argument('--input_training_file', default='../vivos/train/train.txt')
+    parser.add_argument('--input_validation_file', default='../vivos/test/test.txt')
     parser.add_argument('--checkpoint_path', default='cp_hifigan')
-    parser.add_argument('--config', default='')
+    parser.add_argument('--config', default='config_v1.json')
     parser.add_argument('--training_epochs', default=3100, type=int)
-    parser.add_argument('--stdout_interval', default=5, type=int)
+    parser.add_argument('--stdout_interval', default=10, type=int)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--summary_interval', default=100, type=int)
     parser.add_argument('--validation_interval', default=1000, type=int)
@@ -255,6 +257,8 @@ def main():
     json_config = json.loads(data)
     h = AttrDict(json_config)
     build_env(a.config, 'config.json', a.checkpoint_path)
+
+    torch.cuda.empty_cache()
 
     torch.manual_seed(h.seed)
     if torch.cuda.is_available():
