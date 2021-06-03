@@ -1,6 +1,5 @@
 # HiFi-GAN for Vietnamese Speech Synthesis
 
-This repo is copied and modified from https://github.com/jik876/hifi-gan
 
 ## **Pre-requisites**
 1. Python >= 3.6
@@ -22,7 +21,8 @@ Pretrained model with discriminator and generator weights that can be used as a 
 
 
 ## **Training with Fine-tuning**
-Generated mel-spectrograms in numpy format using Tacotron2 with teacher-forcing are provided in **preprocessed VIVOS dataset**.
+Generated mel-spectrograms in numpy format using Tacotron2 with teacher-forcing (GTA) <br>
+are provided in **preprocessed VIVOS dataset**.
 ```
 python train.py --training_epochs 1000 --config config_v1.json \ 
 --train_wavs_dir [vivos train waves dir] \
