@@ -9,6 +9,8 @@ from scipy.io.wavfile import write
 from env import AttrDict
 from meldataset import mel_spectrogram, MAX_WAV_VALUE, load_wav
 from models import Generator
+import tqdm
+import time
 
 h = None
 device = None
@@ -40,26 +42,35 @@ def inference(a):
     state_dict_g = load_checkpoint(a.checkpoint_file, device)
     generator.load_state_dict(state_dict_g['generator'])
 
-    filelist = os.listdir(a.input_wavs_dir)
+    filelist = glob.glob(f"{a.input_mels_dir}/*.wav")
 
     os.makedirs(a.output_dir, exist_ok=True)
 
     generator.eval()
     generator.remove_weight_norm()
     with torch.no_grad():
-        for i, filname in enumerate(filelist):
-            wav, sr = load_wav(os.path.join(a.input_wavs_dir, filname))
+        total_time = 0.0
+        for file_path in tqdm.tqdm(filelist):
+            wav, _ = load_wav(file_path)
             wav = wav / MAX_WAV_VALUE
             wav = torch.FloatTensor(wav).to(device)
             x = get_mel(wav.unsqueeze(0))
+
+            start_time = time.time()
+
             y_g_hat = generator(x)
             audio = y_g_hat.squeeze()
             audio = audio * MAX_WAV_VALUE
             audio = audio.cpu().numpy().astype('int16')
 
-            output_file = os.path.join(a.output_dir, os.path.splitext(filname)[0] + '_generated.wav')
+            total_time += time.time() - start_time
+
+            file_name = os.path.basename(file_path).split('.')[0]
+            output_file = os.path.join(a.output_dir, file_name + '_generated.wav')
             write(output_file, h.sampling_rate, audio)
             print(output_file)
+
+    print("Elapsed time:", total_time)
 
 
 def main():
