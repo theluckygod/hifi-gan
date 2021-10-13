@@ -8,7 +8,7 @@ from librosa.util import normalize
 from scipy.io.wavfile import read
 from librosa.filters import mel as librosa_mel_fn
 
-MAX_WAV_VALUE = 32768.0
+MAX_WAV_VALUE = 32767.0
 
 
 def load_wav(full_path):
