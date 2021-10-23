@@ -1,5 +1,6 @@
 import math
 import os
+import re
 import random
 import torch
 import torch.utils.data
@@ -7,7 +8,7 @@ import numpy as np
 from librosa.util import normalize
 from scipy.io.wavfile import read
 from librosa.filters import mel as librosa_mel_fn
-
+import tgt
 MAX_WAV_VALUE = 32767.0
 
 
@@ -41,6 +42,45 @@ def spectral_de_normalize_torch(magnitudes):
     output = dynamic_range_decompression_torch(magnitudes)
     return output
 
+def get_alignment(tier, sampling_rate, hop_length):
+    sil_phones = ["sil", "sp", "spn"]
+
+    phones = []
+    durations = []
+    start_time = 0
+    end_time = 0
+    end_idx = 0
+    for t in tier._objects:
+        s, e, p = t.start_time, t.end_time, t.text
+
+        # Trim leading silences
+        if phones == []:
+            if p in sil_phones:
+                continue
+            else:
+                start_time = s
+
+        if p not in sil_phones:
+            # For ordinary phones
+            phones.append(p)
+            end_time = e
+            end_idx = len(phones)
+        else:
+            # For silent phones
+            phones.append(p)
+
+        durations.append(
+            int(
+                np.round(e * sampling_rate / hop_length)
+                - np.round(s * sampling_rate / hop_length)
+            )
+        )
+
+    # Trim tailing silences
+    phones = phones[:end_idx]
+    durations = durations[:end_idx]
+
+    return phones, durations, start_time, end_time
 
 mel_basis = {}
 hann_window = {}
@@ -86,7 +126,7 @@ def get_dataset_filelist(a):
 class MelDataset(torch.utils.data.Dataset):
     def __init__(self, training_files, segment_size, n_fft, num_mels,
                  hop_size, win_size, sampling_rate,  fmin, fmax, split=True, shuffle=True, n_cache_reuse=1,
-                 device=None, fmax_loss=None, fine_tuning=False, base_mels_path=None):
+                 device=None, fmax_loss=None, fine_tuning='', base_mels_path=None, textgrid_path=''):
         self.audio_files = training_files
         random.seed(1234)
         if shuffle:
@@ -106,6 +146,8 @@ class MelDataset(torch.utils.data.Dataset):
         self._cache_ref_count = 0
         self.device = device
         self.fine_tuning = fine_tuning
+        if self.fine_tuning == "FastSpeech2":
+            self.textgrid_path = textgrid_path
         self.base_mels_path = base_mels_path
 
     def __getitem__(self, index):
@@ -141,13 +183,24 @@ class MelDataset(torch.utils.data.Dataset):
                                   center=False)
         else:
             file_name = os.path.split(filename)[-1]
-            folder_name = file_name.split('_')[0]
+            folder_name = re.split('-|_', file_name)[0]
             mel = np.load(
                 os.path.join(self.base_mels_path, folder_name, os.path.splitext(file_name)[0] + '.npy'))
             mel = torch.from_numpy(mel)
 
             if len(mel.shape) < 3:
                 mel = mel.unsqueeze(0)
+
+            if self.fine_tuning == "FastSpeech2":
+                tg_path = os.path.join(self.textgrid_path, folder_name, os.path.splitext(file_name)[0] + ".TextGrid")
+                textgrid = tgt.io.read_textgrid(tg_path)
+                _, _, start, end = get_alignment(
+                    textgrid.get_tier_by_name("phones"),
+                    self.sampling_rate,
+                    self.hop_size
+                )
+                assert start < end, f"Invalid textgrid {tg_path}"
+                audio = audio[:, int(self.sampling_rate * start) : int(self.sampling_rate * end)]
 
             len_mel = int(audio.size(-1) / self.hop_size)
             gap = mel.size(-1) - len_mel
@@ -160,7 +213,7 @@ class MelDataset(torch.utils.data.Dataset):
                 frames_per_seg = math.ceil(self.segment_size / self.hop_size)
 
                 if audio.size(1) >= self.segment_size:
-                    mel_start = random.randint(0, mel.size(2) - frames_per_seg - 1)
+                    mel_start = random.randint(0, max(0, mel.size(2) - frames_per_seg - 1))
                     mel = mel[:, :, mel_start:mel_start + frames_per_seg]
                     audio = audio[:, mel_start * self.hop_size:(mel_start + frames_per_seg) * self.hop_size]
                 else:
