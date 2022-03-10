@@ -232,21 +232,19 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--group_name', default=None)
-    parser.add_argument('--train_wavs_dir', default='vlsp_2021/wav')
-    parser.add_argument('--val_wavs_dir', default='vlsp_2021/wav')
-    parser.add_argument('--train_mels_dir', default='vlsp_2021/mel')
-    parser.add_argument('--val_mels_dir', default='vlsp_2021/mel')
-    parser.add_argument('--input_training_file', default='vlsp_2021/train.txt')
-    parser.add_argument('--input_validation_file', default='vlsp_2021/val.txt')
-    parser.add_argument('--textgrid_path', help="Only for fine tune FastSpeech2 mel", default='vlsp_2021/TextGrid')
+    parser.add_argument('--input_wavs_dir', default='vivos/wav')
+    parser.add_argument('--input_mels_dir', default='vivos/mel')
+    parser.add_argument('--input_training_file', default='vivos/train.txt')
+    parser.add_argument('--input_validation_file', default='vivos/val.txt')
+    parser.add_argument('--textgrid_path', help="Only for fine tune FastSpeech2 mel", default='vivos/TextGrid')
     parser.add_argument('--checkpoint_path', default='cp_hifigan')
-    parser.add_argument('--config', default='config_v1_vlsp_2021.json')
+    parser.add_argument('--config', default='config_v1.json')
     parser.add_argument('--training_epochs', default=3100, type=int)
     parser.add_argument('--stdout_interval', default=10, type=int)
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--summary_interval', default=100, type=int)
     parser.add_argument('--validation_interval', default=1000, type=int)
-    parser.add_argument('--fine_tuning', default="", type=str)
+    parser.add_argument('--fine_tuning', default="", type=str) # "", "FastSpeech2" or "Tacotron2"
 
     args = parser.parse_args()
 
